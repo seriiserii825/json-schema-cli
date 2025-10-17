@@ -11,7 +11,13 @@ import { log, err } from "./modules/logger.js";
 import getApiFilesUrls from "./modules/getApiFilesUrls.js";
 
 async function run() {
-  let api_urls = getApiFilesUrls();
+  try {
+    let api_urls = getApiFilesUrls();
+    console.log("api_urls", api_urls);
+  } catch (error) {
+    err(`✖ ${ (error as Error).message }`);
+    process.exit(1);
+  }
 
   // // 1) Ensure deps (global + dev) just like your JS version
   // ensurePkg("generate-schema", { global: true });
