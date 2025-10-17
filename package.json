@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "bin": {
-    "gen-type": "./bin/gen-type.js"
+    "gen-type": "./bin/gen-type.mjs"
   },
   "dependencies": {},
   "devDependencies": {}
