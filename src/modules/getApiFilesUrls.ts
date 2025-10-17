@@ -1,9 +1,6 @@
 import fs from "fs";
 import path from "node:path";
-type TConfig = {
-  theme_name: string;
-  api_folder: string;
-};
+import getConfig from "./getConfig.js";
 export default function getApiFilesUrls(): string[] {
   const { api_folder } = getConfig();
 
@@ -19,15 +16,6 @@ export default function getApiFilesUrls(): string[] {
   } catch (error) {
     throw new Error(`Error extracting API URLs: ${(error as Error).message}`);
   }
-}
-function getConfig(): TConfig {
-  const cwd = process.cwd();
-  const theme_name = cwd.split("/").pop() || "unknown_theme";
-  const api_folder = path.join(cwd, "api");
-  return {
-    theme_name,
-    api_folder,
-  };
 }
 
 function getApiUrlsFromFiles(api_folder: string): string[] {
