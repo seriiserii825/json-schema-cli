@@ -1,0 +1,10 @@
+{
+  "name": "json-schema-cli",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "gen-type": "./bin/gen-type.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
