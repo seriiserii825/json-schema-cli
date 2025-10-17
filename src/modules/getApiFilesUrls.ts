@@ -1,7 +1,8 @@
 import fs from "fs";
 import path from "node:path";
 import getConfig from "./getConfig.js";
-export default function getApiFilesUrls(): string[] {
+import {TApiUrl} from "../custom_types/TApiUrl.js";
+export default function getApiFilesUrls(): TApiUrl[] {
   const { api_folder } = getConfig();
   console.log(api_folder, "api_folder");
 
@@ -19,7 +20,7 @@ export default function getApiFilesUrls(): string[] {
   }
 }
 
-function getApiUrlsFromFiles(api_folder: string): string[] {
+function getApiUrlsFromFiles(api_folder: string): TApiUrl[] {
   const files_list = fs.readdirSync(api_folder);
   console.log("files_list", files_list);
   const files_with_routes: string[] = [];
@@ -38,7 +39,7 @@ function getApiUrlsFromFiles(api_folder: string): string[] {
   }
   // from each file i need to extract between '' in register route line
   //register_rest_route('products-filter/v1', 'products',
-  const api_urls: string[] = [];
+  const api_urls: TApiUrl[] = [];
   files_with_routes.forEach((file_path) => {
     const file_content = fs.readFileSync(file_path, "utf-8");
     // Match: register_rest_route('namespace', 'route',
@@ -47,7 +48,11 @@ function getApiUrlsFromFiles(api_folder: string): string[] {
     while ((match = regex.exec(file_content)) !== null) {
       const full_route = `${match[1]}/${match[2]}`;
       console.log(full_route, "full_route");
-      api_urls.push(full_route);
+      const file_name = path.basename(file_path);
+      api_urls.push({
+        file_name,
+        route: full_route,
+      });
     }
   });
   console.log(files_with_routes, "files_with_routes");
