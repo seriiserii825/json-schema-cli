@@ -9,12 +9,12 @@ import { generateTypes } from "./modules/genTypes.js";
 import { ask, closePrompts } from "./modules/prompts.js";
 import { log, err } from "./modules/logger.js";
 import getApiFilesUrls from "./modules/getApiFilesUrls.js";
-import fetchApiFromFilesUrls from "./modules/fetchApiFromFilesUrls.js";
+import fetchApiFromFileUrl from "./modules/fetchApiFromFileUrl.js";
 
 async function run() {
   try {
     const api_urls = getApiFilesUrls();
-    fetchApiFromFilesUrls(api_urls)
+    fetchApiFromFileUrl(api_urls)
   } catch (error) {
     err(`✖ ${ (error as Error).message }`);
     process.exit(1);

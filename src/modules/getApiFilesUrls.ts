@@ -3,6 +3,7 @@ import path from "node:path";
 import getConfig from "./getConfig.js";
 export default function getApiFilesUrls(): string[] {
   const { api_folder } = getConfig();
+  console.log(api_folder, "api_folder");
 
   if (!fs.existsSync(api_folder)) {
     throw new Error(`API folder does not exist: ${api_folder}`);
@@ -20,6 +21,7 @@ export default function getApiFilesUrls(): string[] {
 
 function getApiUrlsFromFiles(api_folder: string): string[] {
   const files_list = fs.readdirSync(api_folder);
+  console.log("files_list", files_list);
   const files_with_routes: string[] = [];
   // check in each file if have "register_rest_route"
 
@@ -30,6 +32,7 @@ function getApiUrlsFromFiles(api_folder: string): string[] {
       files_with_routes.push(file_path);
     }
   });
+  console.log(files_list, "files_list");
   if (files_with_routes.length === 0) {
     throw new Error(`No API files with routes found in: ${api_folder}`);
   }
@@ -38,11 +41,16 @@ function getApiUrlsFromFiles(api_folder: string): string[] {
   const api_urls: string[] = [];
   files_with_routes.forEach((file_path) => {
     const file_content = fs.readFileSync(file_path, "utf-8");
-    const regex = /register_rest_route\(\s*'([^']+)'/g;
+    // Match: register_rest_route('namespace', 'route',
+    const regex = /register_rest_route\(\s*'([^']+)'\s*,\s*'([^']+)'/g;
     let match;
     while ((match = regex.exec(file_content)) !== null) {
-      api_urls.push(match[1]);
+      const full_route = `${match[1]}/${match[2]}`;
+      console.log(full_route, "full_route");
+      api_urls.push(full_route);
     }
   });
+  console.log(files_with_routes, "files_with_routes");
+  console.log(api_urls, "api_urls");
   return api_urls;
 }
