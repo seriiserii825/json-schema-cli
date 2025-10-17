@@ -12,7 +12,7 @@ import { log, err } from "./modules/logger.js";
 async function run() {
   // 1) Ensure deps (global + dev) just like your JS version
   ensurePkg("generate-schema", { global: true });
-  ensurePkg("generate-schema", { dev: true });
+  // ensurePkg("generate-schema", { dev: true });
   ensurePkg("json-schema-to-typescript", { global: true });
 
   // 2) Clipboard -> JSON
