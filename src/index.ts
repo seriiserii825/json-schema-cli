@@ -1,43 +1,39 @@
 #!/usr/bin/env node
 import * as AjvNS from "ajv";
 import * as addFormatsNS from "ajv-formats";
+import fs from "node:fs";
+import path from "node:path";
+import { ensurePkg } from "./modules/ensurePkg.js";
+import fetchApiFromFileUrl from "./modules/fetchApiFromFileUrl.js";
+import { generateTypes } from "./modules/genTypes.js";
+import getApiFilesUrls from "./modules/getApiFilesUrls.js";
+import getConfig from "./modules/getConfig.js";
+import { loadGenerateSchema } from "./modules/loadGenerateSchema.js";
+import { err, error_color, info_color, log, success_color } from "./modules/logger.js";
 
 // берём default если он есть, иначе сам namespace
 const Ajv: any = (AjvNS as any).default ?? AjvNS;
 const addFormats: any = (addFormatsNS as any).default ?? addFormatsNS;
 
-import fs from "node:fs";
-import path from "node:path";
-import { ensurePkg } from "./modules/ensurePkg.js";
-import { loadGenerateSchema } from "./modules/loadGenerateSchema.js";
-import { generateTypes } from "./modules/genTypes.js";
-import { log, err } from "./modules/logger.js";
-import getApiFilesUrls from "./modules/getApiFilesUrls.js";
-import fetchApiFromFileUrl from "./modules/fetchApiFromFileUrl.js";
-import getConfig from "./modules/getConfig.js";
-
-// ... верх файла без изменений (Ajv импорты/шимы и т.п.)
-
 async function run() {
-  // deps ...
   ensurePkg("generate-schema", { global: true });
   ensurePkg("json-schema-to-typescript", { global: true });
   ensurePkg("ajv", { dev: true });
   ensurePkg("ajv-formats", { dev: true });
 
   const config = getConfig();
-  const ACCEPT = process.argv.includes("--accept") || process.env.CONTRACT_ACCEPT === "1";
+
+  const argv = new Set(process.argv.slice(2));
+  const ACCEPT = argv.has("--accept") || process.env.CONTRACT_ACCEPT === "1";
 
   try {
     const api_urls = getApiFilesUrls();
     const current = api_urls[0];
     const result = await fetchApiFromFileUrl(current);
 
-    // --- paths
     const baseName = current.file_name.replace(".php", "");
     const json_path = path.join(config.json_folder, `${baseName}-sample.json`);
 
-    // NEW: разносим контракт и генерат
     const contract_schema_path = path.join(
       config.schema_folder,
       `${baseName}-contract.schema.json`
@@ -50,13 +46,12 @@ async function run() {
     const schema_title = baseName.replace(/(^\w|-\w)/g, (m) => m.replace("-", "").toUpperCase());
     const type_path = path.join(config.types_folder, `${baseName}-types.d.ts`);
 
-    // --- save sample JSON (для удобства)
     fs.writeFileSync(json_path, JSON.stringify(result, null, 2));
-    log(`✅ JSON saved to ${path.resolve(json_path)}`);
+    log(success_color(`✅ JSON saved to ${path.resolve(json_path)}`));
 
-    // --- 1) CONTRACT CHECK: валидируем против контракта до любой регенерации
+    // --- 1) CONTRACT CHECK
     if (fs.existsSync(contract_schema_path)) {
-      log("🔒 Contract check: validating response against CONTRACT schema...");
+      log(info_color("🔎 Validating fetched JSON against CONTRACT schema..."));
       const contractSchema = JSON.parse(fs.readFileSync(contract_schema_path, "utf8"));
 
       const ajvPrev = new Ajv({ allErrors: true, strict: false });
@@ -67,35 +62,50 @@ async function run() {
         const lines = (validatePrev.errors || [])
           .map((e) => `• path: ${e.instancePath || "/"}  msg: ${e.message}`)
           .join("\n");
-        throw new Error(
-          "❌ Contract BREAKING change detected (response does NOT match CONTRACT schema):\n" +
-            lines +
-            "\n💡 Tip: backend removed/changed a field (e.g., `slug`). " +
-            "Inspect diff and run with --accept only if you intentionally update the contract."
-        );
+
+        if (ACCEPT) {
+          log(
+            error_color(
+              "⚠ Contract mismatch detected, but --accept is set. " +
+                "Proceeding to generate a new schema and overwrite CONTRACT.\n" +
+                lines
+            )
+          );
+        } else {
+          throw new Error(
+            error_color(
+              "❌ Contract BREAKING change detected (response does NOT match CONTRACT schema):\n" +
+                lines +
+                "\n💡 Tip: run again with --accept if you intentionally update the contract."
+            )
+          );
+        }
+      } else {
+        log(success_color("✅ Contract is intact (response matches CONTRACT schema)."));
       }
-      log("✅ Contract is intact (response matches CONTRACT schema).");
     } else {
-      log("ℹ No CONTRACT schema found — skipping contract check (first run?).");
+      log(info_color("ℹ No CONTRACT schema found, skipping contract validation step."));
     }
 
-    // --- 2) Генерим новую схему ИЗ текущего ответа (это просто «снимок факта»)
+    // --- 2) Generate new schema
     const generateSchema = loadGenerateSchema();
     const schema = generateSchema.json(schema_title, result);
     schema.$schema = "http://json-schema.org/draft-07/schema#";
     schema.additionalProperties = false;
 
-    // Делает все поля в объекте required (механически)
     addRequiredFields(schema);
+    forceRequired(schema, ["properties", "pages", "items"], [
+      "id",
+      "title",
+      "url",
+      "img",
+      "slug",
+    ]);
 
-    // (ОПЦИОНАЛЬНО) Прибить конкретные обязательные поля для items pages:
-    forceRequired(schema, ["properties", "pages", "items"], ["id", "title", "url", "img", "slug"]);
-
-    // Сохраняем только в *generated*
     fs.writeFileSync(generated_schema_path, JSON.stringify(schema, null, 2));
-    log(`✅ Generated schema written to ${path.resolve(generated_schema_path)}`);
+    log(success_color(`✅ Generated schema written to ${path.resolve(generated_schema_path)}`));
 
-    // --- 3) Валидация текущих данных против *generated* (просто sanity check)
+    // --- 3) Validate fetched data against generated schema
     log("🔎 Validating fetched JSON against GENERATED schema...");
     const ajv = new Ajv({
       allErrors: true,
@@ -111,26 +121,28 @@ async function run() {
         .join("\n");
       throw new Error(`Schema validation failed (generated):\n${lines}`);
     }
-    log("✅ Data conforms to GENERATED schema");
+    log(success_color("✅ Fetched JSON is valid against GENERATED schema."));
 
-    // --- 4) По желанию «принять» изменения контракта (ручной шаг)
+    // --- 4) Accept contract if requested
     if (ACCEPT) {
       fs.copyFileSync(generated_schema_path, contract_schema_path);
       log(
-        `✅ CONTRACT schema updated from generated (accepted): ${path.resolve(contract_schema_path)}`
+        success_color(
+          `✅ CONTRACT schema updated from generated (accepted): ${path.resolve(contract_schema_path)}`
+        )
       );
     } else {
-      log("ℹ CONTRACT schema left unchanged. Use --accept to update it intentionally.");
+      log(info_color("ℹ To accept changes to CONTRACT schema, run with --accept flag."));
     }
 
-    // --- 5) Типы
-    log("🛠  Generating TypeScript types from GENERATED schema...");
+    // --- 5) Generate types
+    log(info_color("🔎 Generating TypeScript definitions from schema..."));
     const dts = await generateTypes(schema, schema_title);
     fs.writeFileSync(type_path, dts);
-    log(`✅ Type definitions written to ${path.resolve(type_path)}`);
+    log(success_color(`✅ TypeScript definitions written to ${path.resolve(type_path)}`));
     log("🎉 Done.");
   } catch (error) {
-    err(`✖ ${(error as Error).message}`);
+    err(error_color(`✖ ${(error as Error).message}`));
     process.exit(1);
   }
 }
@@ -152,10 +164,6 @@ function addRequiredFields(schemaObj: any) {
   }
 }
 
-/**
- * Принудительно делает перечисленные свойства обязательными у узла по пути
- * pathSpec: массив ключей до узла-объекта (например ["properties","pages","items"])
- */
 function forceRequired(schemaObj: any, pathSpec: string[], requiredList: string[]) {
   let node = schemaObj;
   for (const key of pathSpec) {

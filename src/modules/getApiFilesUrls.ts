@@ -2,9 +2,10 @@ import fs from "fs";
 import path from "node:path";
 import getConfig from "./getConfig.js";
 import {TApiUrl} from "../custom_types/TApiUrl.js";
+import {log} from "console";
+import {info_color} from "./logger.js";
 export default function getApiFilesUrls(): TApiUrl[] {
   const { api_folder } = getConfig();
-  console.log(api_folder, "api_folder");
 
   if (!fs.existsSync(api_folder)) {
     throw new Error(`API folder does not exist: ${api_folder}`);
@@ -22,7 +23,6 @@ export default function getApiFilesUrls(): TApiUrl[] {
 
 function getApiUrlsFromFiles(api_folder: string): TApiUrl[] {
   const files_list = fs.readdirSync(api_folder);
-  console.log("files_list", files_list);
   const files_with_routes: string[] = [];
   // check in each file if have "register_rest_route"
 
@@ -33,7 +33,6 @@ function getApiUrlsFromFiles(api_folder: string): TApiUrl[] {
       files_with_routes.push(file_path);
     }
   });
-  console.log(files_list, "files_list");
   if (files_with_routes.length === 0) {
     throw new Error(`No API files with routes found in: ${api_folder}`);
   }
@@ -47,7 +46,7 @@ function getApiUrlsFromFiles(api_folder: string): TApiUrl[] {
     let match;
     while ((match = regex.exec(file_content)) !== null) {
       const full_route = `${match[1]}/${match[2]}`;
-      console.log(full_route, "full_route");
+      log(info_color(`Found API route: ${full_route} in file: ${file_path}`));
       const file_name = path.basename(file_path);
       api_urls.push({
         file_name,
@@ -55,7 +54,5 @@ function getApiUrlsFromFiles(api_folder: string): TApiUrl[] {
       });
     }
   });
-  console.log(files_with_routes, "files_with_routes");
-  console.log(api_urls, "api_urls");
   return api_urls;
 }
